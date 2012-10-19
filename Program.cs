@@ -87,7 +87,7 @@ namespace BatchDelete
 
                 stopwatch.Stop();
 
-                Console.WriteLine(string.Format("Processed batch #{0} of {1} items in {2} second(s)", batchNumber, BatchSize, (stopwatch.Elapsed.Milliseconds/ 1000.0)));
+                Console.WriteLine(string.Format("Processed batch #{0} of {1} items in {2} second(s)", batchNumber, BatchSize, stopwatch.Elapsed.Seconds));
                 batchNumber++;
             }
         }
