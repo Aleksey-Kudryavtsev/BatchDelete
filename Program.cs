@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Text;
 using Microsoft.SharePoint;
 
@@ -6,25 +7,58 @@ namespace BatchDelete
 {
     class Program
     {
-        private const int BatchSize = 500;
+        private const int SiteUrlArgumentIndex = 1;
+        private const int BatchSizeArgumentIndex = 0;
+
+        private static uint BatchSize;
 
         static void Main(string[] args)
         {
-            if(args.Length < 2)
+            if(args.Length < 3)
             {
-                Console.WriteLine("usage: BatchDelete <site_url> <list1_name> ... <listN_name>");
+                PrintUsage();
+                return;
             }
 
-            using(SPSite site = new SPSite(args[0]))
+            if(!ReadBatchSizeFromCommandLine(args))
             {
-                for(int i=1; i<args.Length; i++)
+                PrintUsage();
+                Console.WriteLine("Batch size should be an positive integer");
+                return;
+            }
+
+            using(SPSite site = new SPSite(args[SiteUrlArgumentIndex]))
+            {
+                for (int i = SiteUrlArgumentIndex + 1; i < args.Length; i++)
                 {
-                    Console.WriteLine(string.Format("Cleaning list: {0}", args[i]));
-                    SPList list = site.RootWeb.GetList(args[i]);
+                    string listUrl = args[i];
+                    Console.WriteLine(string.Format("Cleaning list: {0}", listUrl));
+                    SPList list = site.RootWeb.GetList(listUrl);
 
                     CleanList(list);
                 }
             }
+        }
+
+        private static bool ReadBatchSizeFromCommandLine(string[] args)
+        {
+            uint batchSize;
+            if (uint.TryParse(args[BatchSizeArgumentIndex], out batchSize))
+            {
+                if(batchSize == 0)
+                {
+                    return false;
+                }
+                BatchSize = batchSize;
+                return true;
+            }
+            
+            return false;
+        }
+
+        private static void PrintUsage()
+        {
+            Console.WriteLine("usage: BatchDelete <batch_size> <site url> <list1 url> ... <listN url>");
         }
 
         private static void CleanList(SPList list)
@@ -32,11 +66,7 @@ namespace BatchDelete
             if (list == null)
                 throw new ArgumentNullException("list");
 
-            SPQuery spQuery = new SPQuery();
-            spQuery.Query = "";
-            spQuery.ViewFields = "";
-            spQuery.ViewAttributes = "Scope=\"RecursiveAll\"";
-            spQuery.RowLimit = BatchSize;
+            SPQuery spQuery = CreateGetAllItemsQuery();
 
             int batchNumber = 1;
 
@@ -49,18 +79,40 @@ namespace BatchDelete
 
                 string batchDeleteXmlCommand = GetBatchDeleteXmlCommand(list, items);
 
-                bool unsafeUpdate = list.ParentWeb.AllowUnsafeUpdates;
-                try
-                {
-                    list.ParentWeb.AllowUnsafeUpdates = true;
-                    list.ParentWeb.ProcessBatchData(batchDeleteXmlCommand);
-                    Console.WriteLine("Processed batch " + batchNumber);
-                    batchNumber++;
-                }
-                finally
-                {
-                    list.ParentWeb.AllowUnsafeUpdates = unsafeUpdate;
-                }
+
+                Stopwatch stopwatch = new Stopwatch();
+                stopwatch.Start();
+
+                RunDeleteBatch(list, batchDeleteXmlCommand);
+
+                stopwatch.Stop();
+
+                Console.WriteLine(string.Format("Processed batch #{0} of {1} items in {2} second(s)", batchNumber, BatchSize, (stopwatch.Elapsed.Milliseconds/ 1000.0)));
+                batchNumber++;
+            }
+        }
+
+        private static SPQuery CreateGetAllItemsQuery()
+        {
+            SPQuery spQuery = new SPQuery();
+            spQuery.Query = "";
+            spQuery.ViewFields = "";
+            spQuery.ViewAttributes = "Scope=\"RecursiveAll\"";
+            spQuery.RowLimit = BatchSize;
+            return spQuery;
+        }
+
+        private static void RunDeleteBatch(SPList list, string batchDeleteXmlCommand)
+        {
+            bool unsafeUpdate = list.ParentWeb.AllowUnsafeUpdates;
+            try
+            {
+                list.ParentWeb.AllowUnsafeUpdates = true;
+                list.ParentWeb.ProcessBatchData(batchDeleteXmlCommand);
+            }
+            finally
+            {
+                list.ParentWeb.AllowUnsafeUpdates = unsafeUpdate;
             }
         }
 
