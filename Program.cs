@@ -113,7 +113,7 @@ namespace BatchDelete
 
         private static void PrintUsage()
         {
-            Console.WriteLine("usage: BatchDelete <batch_size> <site url> (RecycleBin | <subwebUrl> <list1 url> ... <listN url>)");
+            Console.WriteLine("usage: BatchDelete <batch_size> <site url> (RecycleBin | (<subwebUrl> | root) <list1 url> ... <listN url>)");
         }
 
         private static void CleanList(SPList list)
@@ -163,18 +163,7 @@ namespace BatchDelete
             {
                 list.ParentWeb.AllowUnsafeUpdates = true;
 
-                Console.WriteLine(batchDeleteXmlCommand);
-
-                Console.ReadKey(true);
-
-                string result = list.ParentWeb.ProcessBatchData(batchDeleteXmlCommand);
-
-                if(result != null)
-                {
-                    Console.WriteLine(result);
-                }
-
-                Console.ReadKey(true);
+                list.ParentWeb.ProcessBatchData(batchDeleteXmlCommand);
             }
             finally
             {
